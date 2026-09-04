@@ -167,6 +167,7 @@ async function boot() {
 }
 
 let lkRoom = null;
+const liveRoomRef = ref(null);
 let graceTimer = null;
 // Mobil TikTok-tarzı tam ekran canlı deneyim: yalnızca mobilde + canlı ilanda devreye girer.
 const isMobile = ref(typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches);
@@ -174,15 +175,12 @@ const mobileLiveActive = ref(false);
 // Mobilde canlı ilan modunda: satır-içi sohbet/teklif alanları gizlenir, tam ekran oda kullanılır.
 const mobileLiveMode = computed(() => isMobile.value && !!props.a?.is_live && !props.a?.has_finished && !props.a?.is_owner);
 function openMobileLive() {
-    // Çift LiveKit bağlantısı çakışmasını önle: tam ekran oda açılırken satır-içi
-    // izleyici bağlantısını kapat (aynı kimlikle ikinci bağlantı ilkini düşürür).
-    disconnectViewerStream();
+    // Paylaşılan LiveKit bağlantısı Show.vue'da yaşıyor; tam ekran YALNIZCA görsel bir geçiş.
+    // Bağlantıya dokunma → reconnect yok, "bağlanılıyor" görünmez.
     mobileLiveActive.value = true;
 }
 function onMobileLiveClose() {
-    // Oda kapanınca satır-içi izleyici bağlantısını yeniden kur.
     mobileLiveActive.value = false;
-    connectViewerStream();
 }
 // Yayın durumu (izleyici): 'checking' = bağlanılıyor/kontrol ediliyor (nötr spinner),
 // 'live' = video geldi, 'offline' = yayın kesin kapalı. Başlangıç: sunucu is_live derse 'checking'.
@@ -209,6 +207,7 @@ function hideLiveVideo() {
 function disconnectViewerStream() {
     if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; }
     if (lkRoom) { try { lkRoom.disconnect(); } catch (e) {} lkRoom = null; }
+    liveRoomRef.value = null;
     hideLiveVideo();
 }
 async function connectViewerStream() {
@@ -225,6 +224,7 @@ async function connectViewerStream() {
             videoEl,
             onData: onLiveData,
         });
+        liveRoomRef.value = lkRoom;
         const hasVideo = () => {
             let found = false;
             lkRoom.remoteParticipants.forEach((p) => p.trackPublications.forEach((pub) => {
@@ -258,6 +258,7 @@ onUnmounted(() => {
     if (window.__lkOnData) delete window.__lkOnData;
     if (window.__auctionShowCleanup) { try { window.__auctionShowCleanup(); } catch (e) {} }
     if (lkRoom) { try { lkRoom.disconnect(); } catch (e) {} lkRoom = null; }
+    liveRoomRef.value = null;
     // sadece config script'lerini temizle; auction-show.js tekrar kullanılmak üzere kalır
     document.querySelectorAll('script[data-auction-show="1"]').forEach((s) => {
         if (s.src.includes('auctions-new-config.js')) s.remove();
@@ -669,7 +670,7 @@ onUnmounted(() => {
 
         <!-- MOBİL TAM EKRAN CANLI DENEYİM (TikTok/Kick tarzı) -->
         <Teleport to="body">
-            <MobileLiveRoom v-if="mobileLiveActive" :a="a" :config="config" @close="onMobileLiveClose" />
+            <MobileLiveRoom v-if="mobileLiveActive" :a="a" :config="config" :room="liveRoomRef" :stream-state="streamState" @close="onMobileLiveClose" />
         </Teleport>
 
         <!-- Config root — harici JS bu data-* değerlerini okur -->
