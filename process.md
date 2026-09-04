@@ -1,4 +1,12 @@
 # ═══════════════════════════════════════════════════════════════════
+# SABİT KURAL — PUSH HEDEFİ
+# ═══════════════════════════════════════════════════════════════════
+# PUSH HEDEFİ SADECE VE HER ZAMAN: https://github.com/xprlyzed/projectv1
+# — YENİ REPO OLUŞTURULMAYACAK, BAŞKA REPO'YA (projectv2, projectv9, projectv10 dahil) PUSH EDİLMEYECEK.
+# ═══════════════════════════════════════════════════════════════════
+
+
+# ═══════════════════════════════════════════════════════════════════
 # SABİT KURAL — REPO YAPISI KONTROLÜ (HER GÖREVDEN ÖNCE + HER PUSH ÖNCESİ)
 # ═══════════════════════════════════════════════════════════════════
 # Amaç: Proje yapısı bir daha ASLA bozulmasın (nested .git / submodule / laravel_project sarmalayıcı klasör).
