@@ -1,0 +1,34 @@
+{
+  "summary": "Frontend-only test of Bölüm 5 (mobile fullscreen MobileLiveRoom) on real mobile emulation 390x844, logged in as buyer@test.com. ALL requested assertions PASS: (a) inline '.camera-section' visible, (b) data-testid='enter-fullscreen-mobile' present/visible at top-right of the video (x=327,y=236,36x36); clicking it mounts data-testid='mobile-live-room' full-screen; chat send works (no mlr-error, mlr-feed-chat items appear with the sent text); bid works (placeholder read 'En az 6.400 ₺', entered 6450 -> mlr-bid-confirm appeared '6.450 ₺ teklif verilsin mi?' -> mlr-bid-confirm-yes -> no mlr-error, mlr-top-price went 6.336 ₺ -> 6.450 ₺, bid count 13 -> 14); mlr-close removes the room and the inline camera-section returns in 'checking' state and flips to 'offline' after the 8s grace (expected, no publisher). 3 open/close cycles all clean — room mounts/unmounts every time, no stuck 'connecting', zero pageerrors, zero JS exceptions. Two genuine defects found: (1) Laravel Debugbar overlay blocks the room's bottom input row on mobile (real click interception — first run failed all chat/bid clicks with 30s timeout until debugbar was removed from the DOM), (2) feed shows DUPLICATE entries for own chat message and own bid (optimistic pushFeed + poll/data race).",
+  "backend_issues": {"critical": [], "minor": [{"endpoint": "/storage/auctions/a3.jpg, a7.jpg, a8.jpg", "issue": "403 (files missing under storage/app/public/auctions) -> broken auction images; 3 console 'Failed to load resource' errors on the detail page"}]},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Laravel Debugbar (APP_DEBUG=true) over MobileLiveRoom", "issue": "The phpdebugbar bar is fixed at the bottom with a higher stacking context and intercepts pointer events over .mlr-bottom on a 390x844 viewport. Playwright normal clicks on mlr-mode-chat / mlr-mode-bid / mlr-send time out (30s) with 'phpdebugbar subtree intercepts pointer events'. Real mobile users in the preview environment cannot tap chat/bid controls in the fullscreen room. After removing the debugbar nodes, every control works. Fix: set DEBUGBAR_ENABLED=false (or APP_DEBUG=false) for preview.", "selector": "[data-testid='mlr-send'], [data-testid='mlr-mode-chat'], [data-testid='mlr-mode-bid']", "priority": "HIGH"},
+      {"component": "MobileLiveRoom feed", "issue": "Sending one chat message adds TWO identical mlr-feed-chat rows (count 10 -> 12, both 'test alıcı TEST_qa mesaj 1'). Same for own bid: two identical mlr-feed-bid rows '6.450 ₺'. Cause: optimistic pushFeed() in sendChat()/confirmBidNow() plus an in-flight loadChatHistory() poll (started before chatLastId was updated) / bid broadcast re-adds the same record. Needs id-based dedupe in pushFeed (track seen chat/bid ids) instead of only comparing chatLastId/bidLastId at receive time.", "selector": "[data-testid='mlr-feed-chat'], [data-testid='mlr-feed-bid']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "MobileLiveRoom (390x844)", "issues": ["Feed rows overlap the centered 'Yayına bağlanılıyor…' / 'Satıcı henüz yayın başlatmadı' state text, producing unreadable overlapping text when video is not live (see screenshots) — consider raising the state layer or reserving space.", "Viewer count in the room header shows '0' while the inline page badge shows '1 izleyici' (mlr computes numParticipants-1) — inconsistent."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Disable Laravel Debugbar in the preview env (DEBUGBAR_ENABLED=false) — it blocks taps on the MobileLiveRoom bottom input row on mobile.",
+    "Dedupe feed items by chat id / bid id in MobileLiveRoom.pushFeed so own message/bid isn't shown twice.",
+    "Optional: raise z-index / offset of .mlr-state so it doesn't overlap .mlr-feed text; align viewer count with inline badge.",
+    "Optional: add the missing storage/app/public/auctions images (403s)."
+  ],
+  "critical_code_review_comments": [
+    "MobileLiveRoom.sendChat/confirmBidNow push optimistic feed items without registering the id in a seen-set, so a concurrent loadChatHistory poll re-adds the same row (observed duplicate).",
+    "isMobile in Show.vue is a one-shot matchMedia ref (no resize listener) — rotating/resizing will not toggle the mobile fullscreen button.",
+    "connState grace timer is 8s and re-created on every open; correctly cleared in onBeforeUnmount — verified no leak across 3 cycles."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested", "frontend": "100% of requested Bölüm 5 assertions passed (7/7 sections) after working around the debugbar overlay; 2 defects reported"},
+  "seed_data_creation": "Created 2 test chat messages ('TEST_qa mesaj 1') and 1 real bid of 6.450 ₺ on auction 4 by buyer@test.com (top price now 6.450 ₺, 14 bids).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "buyer@test.com / password (from /app/memory/test_credentials.md) — login OK, redirects to /dashboard.",
+  "context_for_next_testing_agent": "Mobile viewport must be set BEFORE navigation (isMobile is evaluated once at setup). Wait ~4s after goto for #app-loader. IMPORTANT: remove phpdebugbar nodes via page.evaluate before clicking anything inside MobileLiveRoom, otherwise clicks are intercepted. Inline stream stays 'checking' 8s then 'offline' (expected, no publisher). /app/storage/logs/laravel.log does not exist (no PHP errors). Top price on auction 4 is now 6.450 ₺, min bid step 64 ₺.",
+  "rca_of_the_issue": "Click failures in run 1 were caused by the Laravel Debugbar fixed bottom bar overlaying .mlr-bottom (z-index/pointer-events), not by app code. Duplicate feed rows are a race between the optimistic pushFeed and the 4s chat poll / bid broadcast which do not dedupe by id at insert time."
+}

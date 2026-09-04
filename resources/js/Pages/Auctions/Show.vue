@@ -173,10 +173,16 @@ const isMobile = ref(typeof window !== 'undefined' && window.matchMedia('(max-wi
 const mobileLiveActive = ref(false);
 // Mobilde canlı ilan modunda: satır-içi sohbet/teklif alanları gizlenir, tam ekran oda kullanılır.
 const mobileLiveMode = computed(() => isMobile.value && !!props.a?.is_live && !props.a?.has_finished && !props.a?.is_owner);
-function openMobileLive() { mobileLiveActive.value = true; }
+function openMobileLive() {
+    // Çift LiveKit bağlantısı çakışmasını önle: tam ekran oda açılırken satır-içi
+    // izleyici bağlantısını kapat (aynı kimlikle ikinci bağlantı ilkini düşürür).
+    disconnectViewerStream();
+    mobileLiveActive.value = true;
+}
 function onMobileLiveClose() {
-    // Kapatınca satır-içi bağlantı AÇMA — mobilde canlı deneyim yalnızca tam ekran oda üzerinden.
+    // Oda kapanınca satır-içi izleyici bağlantısını yeniden kur.
     mobileLiveActive.value = false;
+    connectViewerStream();
 }
 // Yayın durumu (izleyici): 'checking' = bağlanılıyor/kontrol ediliyor (nötr spinner),
 // 'live' = video geldi, 'offline' = yayın kesin kapalı. Başlangıç: sunucu is_live derse 'checking'.
@@ -190,7 +196,7 @@ function revealLiveVideo() {
     const off = document.getElementById('cam-off-state'); if (off) off.style.display = 'none';
     const pill = document.getElementById('stream-live-pill'); if (pill) pill.style.display = 'inline-flex';
     const vol = document.getElementById('vol-btn'); if (vol) vol.style.display = 'inline-flex';
-    const fs = document.getElementById('fs-btn'); if (fs) fs.style.display = 'inline-flex';
+    const fs = document.getElementById('fs-btn'); if (fs && !isMobile.value) fs.style.display = 'inline-flex';
 }
 function hideLiveVideo() {
     streamState.value = 'offline';
@@ -199,6 +205,11 @@ function hideLiveVideo() {
     const pill = document.getElementById('stream-live-pill'); if (pill) pill.style.display = 'none';
     const vol = document.getElementById('vol-btn'); if (vol) vol.style.display = 'none';
     const fs = document.getElementById('fs-btn'); if (fs) fs.style.display = 'none';
+}
+function disconnectViewerStream() {
+    if (graceTimer) { clearTimeout(graceTimer); graceTimer = null; }
+    if (lkRoom) { try { lkRoom.disconnect(); } catch (e) {} lkRoom = null; }
+    hideLiveVideo();
 }
 async function connectViewerStream() {
     // Her izleyici LiveKit odasına bağlanır (yayın canlı olmasa da) → teklifler anlık düşer.
@@ -357,6 +368,11 @@ onUnmounted(() => {
                                         </span>
                                     </div>
                                     <div style="display:flex;gap:6px;">
+                                        <button v-if="isMobile && a.is_live && !a.has_finished && !a.is_owner"
+                                                class="cam-btn-icon" @click="openMobileLive"
+                                                data-testid="enter-fullscreen-mobile" title="Tam ekran canlı yayın">
+                                            <i class="bi bi-arrows-fullscreen"></i>
+                                        </button>
                                         <button class="cam-btn-icon" id="vol-btn" onclick="toggleStreamVolume()" title="Ses aç/kapat" style="display:none;">
                                             <i class="bi bi-volume-mute" id="vol-icon"></i>
                                         </button>

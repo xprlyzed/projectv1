@@ -66,7 +66,17 @@ const remainingText = computed(() => {
     return `${sec}sn`;
 });
 
+const seenChatIds = new Set();
+const seenBidIds = new Set();
 function pushFeed(item) {
+    // id bazlı dedupe: optimistic ekleme + poll/broadcast yarışında aynı kayıt iki kez eklenmesin.
+    if (item.kind === 'chat' && item.id != null) {
+        if (seenChatIds.has(item.id)) return;
+        seenChatIds.add(item.id);
+    } else if (item.kind === 'bid' && item.bidId != null) {
+        if (seenBidIds.has(item.bidId)) return;
+        seenBidIds.add(item.bidId);
+    }
     feed.value.push({ _k: ++feedSeq, ...item });
     if (feed.value.length > 60) feed.value.splice(0, feed.value.length - 60);
     nextTick(() => {
@@ -83,11 +93,11 @@ function onData(msg) {
         if (msg.display_price) topPrice.value = msg.display_price;
         if (typeof msg.total_bids !== 'undefined') bidCount.value = msg.total_bids;
         if (msg.amount) minBid.value = Number(msg.amount) + step;
-        pushFeed({ kind: 'bid', name: msg.bidder_name || msg.name || 'Bir alıcı', amount: fmtTL(msg.amount) });
+        pushFeed({ kind: 'bid', bidId: msg.bid_id, name: msg.bidder_name || msg.name || 'Bir alıcı', amount: fmtTL(msg.amount) });
     } else if (msg.type === 'chat') {
         if (msg.id && msg.id <= chatLastId) return;
         if (msg.id) chatLastId = msg.id;
-        pushFeed({ kind: 'chat', name: msg.user_name || 'Kullanıcı', text: msg.message || '', seller: !!msg.is_seller });
+        pushFeed({ kind: 'chat', id: msg.id, name: msg.user_name || 'Kullanıcı', text: msg.message || '', seller: !!msg.is_seller });
     }
 }
 
@@ -143,7 +153,7 @@ async function loadChatHistory() {
         if (!res.ok) return;
         const d = await res.json();
         (d.messages || []).forEach((m) => {
-            if (m.id > chatLastId) { chatLastId = m.id; pushFeed({ kind: 'chat', name: m.user_name, text: m.message, seller: !!m.is_seller }); }
+            if (m.id > chatLastId) { chatLastId = m.id; pushFeed({ kind: 'chat', id: m.id, name: m.user_name, text: m.message, seller: !!m.is_seller }); }
         });
     } catch (e) { /* sessiz */ }
 }
@@ -163,7 +173,7 @@ async function sendChat() {
         if (res.ok) {
             draft.value = '';
             if (d.id && d.id > chatLastId) { chatLastId = d.id; }
-            pushFeed({ kind: 'chat', name: d.user_name || 'Sen', text: d.message || text, seller: !!d.is_seller, mine: true });
+            pushFeed({ kind: 'chat', id: d.id, name: d.user_name || 'Sen', text: d.message || text, seller: !!d.is_seller, mine: true });
         } else {
             errorMsg.value = d.message || 'Mesaj gönderilemedi.';
         }
@@ -206,7 +216,7 @@ async function confirmBidNow() {
             if (d.display_price) topPrice.value = d.display_price;
             if (typeof d.total_bids !== 'undefined') bidCount.value = d.total_bids;
             minBid.value = Number(d.amount) + step;
-            pushFeed({ kind: 'bid', name: (d.bidder_name || 'Sen'), amount: fmtTL(d.amount), mine: true });
+            pushFeed({ kind: 'bid', bidId: d.bid_id, name: (d.bidder_name || 'Sen'), amount: fmtTL(d.amount), mine: true });
         } else {
             errorMsg.value = d.message || 'Teklif verilemedi.';
         }
