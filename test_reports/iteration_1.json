@@ -1,0 +1,31 @@
+{
+  "summary": "Frontend-only verification of the mobile live-auction inline video fix on /auctions/mavi-beyaz-cini-vazo-uclusu-ZAy4 (is_live=true). Mobile (390x844) and desktop (1920x900) loads tested with real browser emulation, 4.5s wait for #app-loader. All requested assertions PASS: no 'open-mobile-live' CTA card, no 'mobile-live-fab', no 'Canlı yayını tam ekran izle'/'Canlı yayına gir'/'Sohbet et' text, and the inline '.camera-section' renders and is visible on both viewports (showing the expected 'Yayına bağlanılıyor…' connecting spinner since no broadcaster is publishing). Desktop layout intact (title, price/bid card 6.336 TL, tabs, seller panel, bid feed). Zero uncaught JS errors and zero console errors on both loads. Additionally logged in as buyer@test.com on mobile to check the rest of the mobile live flow — found a functional regression (see frontend_issues).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Auctions/Show.vue (mobile live mode)", "issue": "mobileLiveMode still gates the seller strip, live chat card and bid sticky bar (v-show=\"!mobileLiveMode\" at lines 379/401 and v-if at line 621), but the fullscreen MobileLiveRoom entry point (CTA + FAB) was removed. Result: on a MOBILE viewport for a LIVE auction, a logged-in user (verified with buyer@test.com) sees NO bid bar (.bid-sticky-bar absent), NO live chat (viewer-chat-card hidden, viewer-chat-input hidden) and NO seller strip — they cannot bid or chat at all on mobile.", "selector": ".bid-sticky-bar, [data-testid='viewer-chat-card'], [data-testid='stream-seller-strip']", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Live auction detail (mobile)", "issues": ["Inline .camera-section is only 370x208px tall with a small spinner; acceptable but the stream panel sits above description with no seller/bid context now that the mobile blocks are hidden — page feels incomplete on mobile."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Remove the mobileLiveMode gating (or invert it) in resources/js/Pages/Auctions/Show.vue lines 379, 401 and 621 so mobile users on live auctions can see the seller strip, live chat and the sticky bid bar; then re-run 'yarn build'.",
+    "Consider deleting now-dead code: mobileLiveActive/openMobileLive/onMobileLiveClose and the MobileLiveRoom render (line 656) have no entry point."
+  ],
+  "critical_code_review_comments": [
+    "Dead code path: mobileLiveActive is never set to true (openMobileLive is unreferenced) so <MobileLiveRoom v-if=\"mobileLiveActive\"> can never mount.",
+    "mobileLiveMode computed is now only used to HIDE mobile functionality — it hides bid/chat with no replacement UI, which is a user-facing regression.",
+    "Show.vue is 735 lines with large inline style attributes; consider splitting the stream panel and bid panel into child components."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested", "frontend": "100% on requested assertions (3/3 sections passed); 1 additional regression found outside the requested scope"},
+  "seed_data_creation": "None (auction id 4 already seeded is_live=true by main agent)",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "/app/memory/test_credentials.md is empty (template only). Used credentials from the review request: buyer@test.com / password — login succeeded and redirected to /dashboard.",
+  "context_for_next_testing_agent": "Preview URL works; page has no #app-loader element by the time DOM is queried after ~4.5s wait. Live page path: /auctions/mavi-beyaz-cini-vazo-uclusu-ZAy4. Stream state stays 'checking' (data-testid=stream-checking) for 8s then flips to stream-offline since no publisher exists — expected. /app/storage/logs/laravel.log does not exist (no PHP errors logged).",
+  "rca_of_the_issue": "The mobile fullscreen-entry removal was done on the CTA/FAB and camera-section v-show only; the three other mobileLiveMode-gated blocks (seller strip, chat card, sticky bid bar) were left gated, so mobile live auctions lose bid/chat UI entirely."
+}

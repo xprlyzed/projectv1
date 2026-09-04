@@ -162,13 +162,8 @@ async function boot() {
     if ((props.a?.is_live && !props.a?.has_finished) || props.a?.uses_promo_video) {
         try { window.switchTab && window.switchTab('stream'); } catch (e) {}
     }
-    // Mobilde canlı ilan → tam ekran TikTok-tarzı deneyim (kendi LiveKit bağlantısını kurar);
-    // aksi halde masaüstü/satır-içi izleyici akışı.
-    if (isMobile.value && props.a?.is_live && !props.a?.has_finished && !props.a?.is_owner) {
-        mobileLiveActive.value = true;
-    } else {
-        connectViewerStream();
-    }
+    // Satır-içi izleyici akışı (mobil + masaüstü aynı): video doğrudan/otomatik oynar.
+    connectViewerStream();
 }
 
 let lkRoom = null;
@@ -324,15 +319,6 @@ onUnmounted(() => {
 
                 <!-- STREAM PANEL -->
                 <div id="panel-stream" class="section-panel">
-                    <!-- Mobil canlı mod: satır-içi görünüm yerine tam ekran odaya giriş -->
-                    <div v-if="mobileLiveMode" class="mlr-enter-cta" @click="openMobileLive" data-testid="open-mobile-live">
-                        <span class="mlr-enter-ico"><i class="bi bi-broadcast"></i></span>
-                        <span class="mlr-enter-txt">
-                            <strong>Canlı yayını tam ekran izle</strong>
-                            <small>Sohbet et &amp; teklif ver</small>
-                        </span>
-                        <i class="bi bi-arrows-fullscreen mlr-enter-fs"></i>
-                    </div>
                     <template v-if="a.uses_promo_video">
                         <div class="camera-section" data-testid="promo-video-section">
                             <video v-if="a.is_direct_video" :src="a.promo_video_url" class="camera-video" controls style="display:block;object-fit:contain;background:#000;"></video>
@@ -340,7 +326,7 @@ onUnmounted(() => {
                         </div>
                     </template>
                     <template v-else>
-                        <div class="camera-section" v-show="!mobileLiveMode">
+                        <div class="camera-section">
                             <!-- Bağlanılıyor / durum kontrol ediliyor → NÖTR spinner (yanlış "yayın yok" gösterme) -->
                             <div v-show="streamState === 'checking'" class="cam-off-banner" id="cam-checking-state" data-testid="stream-checking">
                                 <div class="cam-spinner" aria-hidden="true"></div>
@@ -668,12 +654,6 @@ onUnmounted(() => {
         <!-- MOBİL TAM EKRAN CANLI DENEYİM (TikTok/Kick tarzı) -->
         <Teleport to="body">
             <MobileLiveRoom v-if="mobileLiveActive" :a="a" :config="config" @close="onMobileLiveClose" />
-            <!-- Oda kapalıyken tekrar girmek için yüzen buton -->
-            <button v-if="mobileLiveMode && !mobileLiveActive" class="mlr-fab" @click="openMobileLive" data-testid="mobile-live-fab">
-                <span class="mlr-fab-dot"></span>
-                <i class="bi bi-broadcast"></i>
-                Canlı yayına gir
-            </button>
         </Teleport>
 
         <!-- Config root — harici JS bu data-* değerlerini okur -->
